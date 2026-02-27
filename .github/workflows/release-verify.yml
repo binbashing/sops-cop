@@ -1,0 +1,52 @@
+name: Release Matrix Verify
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-build-matrix:
+    name: Verify ${{ matrix.goos }}-${{ matrix.goarch }} build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Verify tests on host
+        run: go test ./...
+
+      - name: Cross-compile target
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+
+          OUT="/tmp/sops-enforcer"
+          if [[ "$GOOS" == "windows" ]]; then
+            OUT="${OUT}.exe"
+          fi
+
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags="-s -w" -o "$OUT" .

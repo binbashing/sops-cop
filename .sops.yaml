@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: '(^|.*/).*secret.*\.ya?ml$'
+    encrypted_regex: '^(data|stringData)$'
