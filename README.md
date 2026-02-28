@@ -10,14 +10,15 @@ SOPS-Cop is a CLI tool to enforce SOPS encryption rules without requiring the SO
 ## How it works
 
 - Discovers your existing SOPS configuration and verifies encryption rules are followed.
-- Reports each unencrypted key path to `stderr` with file path and line:column location.
+- Supports YAML, JSON, ENV, and INI files when matched by `.sops.yaml` creation rules.
+- Reports each unencrypted key path to `stderr` with file path and location details (line:column for YAML; path-only fallback for other formats).
 
 ## Exit codes
 
 - `0`: all checked values are encrypted
 - `2`: invalid arguments (for example, unresolvable target path)
 - `3`: file read error (for example, file missing or permission denied)
-- `4`: invalid YAML input
+- `4`: invalid input for the matched file format (YAML/JSON/ENV/INI)
 - `5`: one or more unencrypted values were found
 - `6`: `.sops.yaml` config error (for example, invalid regex)
 
@@ -37,7 +38,7 @@ go install github.com/binbashing/sops-cop@latest
 
 ### Option 2: prebuilt release binary (no Go required)
 
-Download the correct archive from the GitHub Releases page for your OS/arch, extract it, and place `sops-cop` on your `PATH`.
+Download the correct binary from the GitHub Releases page for your OS/arch and place `sops-cop` on your `PATH`.
 
 ## Build
 

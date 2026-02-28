@@ -567,3 +567,144 @@ func TestExampleSecretFixtureWithSopsConfig(t *testing.T) {
 		}
 	})
 }
+
+func TestRunSupportsStructuredFormats(t *testing.T) {
+	t.Run("json plaintext value fails", func(t *testing.T) {
+		tempDir := t.TempDir()
+		sopsConfig := `creation_rules:
+  - path_regex: ".*\\.json$"
+    encrypted_regex: ""
+`
+		if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+			t.Fatalf("write .sops.yaml: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, "secrets.json"), []byte(`{"password":"plaintext"}`), 0o600); err != nil {
+			t.Fatalf("write secrets.json: %v", err)
+		}
+
+		var stderr bytes.Buffer
+		gotExitCode := run(tempDir, &stderr)
+		if gotExitCode != exitUnencryptedValue {
+			t.Fatalf("run() exit code = %d, want %d; stderr=%q", gotExitCode, exitUnencryptedValue, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "secrets.json") || !strings.Contains(stderr.String(), "unencrypted value found") {
+			t.Fatalf("run() stderr = %q, want json violation output", stderr.String())
+		}
+	})
+
+	t.Run("json encrypted value passes", func(t *testing.T) {
+		tempDir := t.TempDir()
+		sopsConfig := `creation_rules:
+  - path_regex: ".*\\.json$"
+    encrypted_regex: ""
+`
+		if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+			t.Fatalf("write .sops.yaml: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, "secrets.json"), []byte(`{"password":"ENC[AES256_GCM,data:abc]"}`), 0o600); err != nil {
+			t.Fatalf("write secrets.json: %v", err)
+		}
+
+		var stderr bytes.Buffer
+		gotExitCode := run(tempDir, &stderr)
+		if gotExitCode != exitSuccess {
+			t.Fatalf("run() exit code = %d, want %d; stderr=%q", gotExitCode, exitSuccess, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "All files compliant") {
+			t.Fatalf("run() stderr = %q, want success summary", stderr.String())
+		}
+	})
+
+	t.Run("dotenv plaintext value fails", func(t *testing.T) {
+		tempDir := t.TempDir()
+		sopsConfig := `creation_rules:
+  - path_regex: ".*\\.env$"
+    encrypted_regex: ""
+`
+		if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+			t.Fatalf("write .sops.yaml: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, "app.env"), []byte("PASSWORD=plaintext\n"), 0o600); err != nil {
+			t.Fatalf("write app.env: %v", err)
+		}
+
+		var stderr bytes.Buffer
+		gotExitCode := run(tempDir, &stderr)
+		if gotExitCode != exitUnencryptedValue {
+			t.Fatalf("run() exit code = %d, want %d; stderr=%q", gotExitCode, exitUnencryptedValue, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "app.env") || !strings.Contains(stderr.String(), "unencrypted value found") {
+			t.Fatalf("run() stderr = %q, want env violation output", stderr.String())
+		}
+	})
+
+	t.Run("dotenv encrypted value passes", func(t *testing.T) {
+		tempDir := t.TempDir()
+		sopsConfig := `creation_rules:
+  - path_regex: ".*\\.env$"
+    encrypted_regex: ""
+`
+		if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+			t.Fatalf("write .sops.yaml: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, "app.env"), []byte("PASSWORD=ENC[AES256_GCM,data:abc]\n"), 0o600); err != nil {
+			t.Fatalf("write app.env: %v", err)
+		}
+
+		var stderr bytes.Buffer
+		gotExitCode := run(tempDir, &stderr)
+		if gotExitCode != exitSuccess {
+			t.Fatalf("run() exit code = %d, want %d; stderr=%q", gotExitCode, exitSuccess, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "All files compliant") {
+			t.Fatalf("run() stderr = %q, want success summary", stderr.String())
+		}
+	})
+
+	t.Run("ini plaintext value fails", func(t *testing.T) {
+		tempDir := t.TempDir()
+		sopsConfig := `creation_rules:
+  - path_regex: ".*\\.ini$"
+    encrypted_regex: ""
+`
+		if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+			t.Fatalf("write .sops.yaml: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, "app.ini"), []byte("[db]\npassword=plaintext\n"), 0o600); err != nil {
+			t.Fatalf("write app.ini: %v", err)
+		}
+
+		var stderr bytes.Buffer
+		gotExitCode := run(tempDir, &stderr)
+		if gotExitCode != exitUnencryptedValue {
+			t.Fatalf("run() exit code = %d, want %d; stderr=%q", gotExitCode, exitUnencryptedValue, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "app.ini") || !strings.Contains(stderr.String(), "unencrypted value found") {
+			t.Fatalf("run() stderr = %q, want ini violation output", stderr.String())
+		}
+	})
+
+	t.Run("ini encrypted value passes", func(t *testing.T) {
+		tempDir := t.TempDir()
+		sopsConfig := `creation_rules:
+  - path_regex: ".*\\.ini$"
+    encrypted_regex: ""
+`
+		if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+			t.Fatalf("write .sops.yaml: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, "app.ini"), []byte("[db]\npassword=ENC[AES256_GCM,data:abc]\n"), 0o600); err != nil {
+			t.Fatalf("write app.ini: %v", err)
+		}
+
+		var stderr bytes.Buffer
+		gotExitCode := run(tempDir, &stderr)
+		if gotExitCode != exitSuccess {
+			t.Fatalf("run() exit code = %d, want %d; stderr=%q", gotExitCode, exitSuccess, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "All files compliant") {
+			t.Fatalf("run() stderr = %q, want success summary", stderr.String())
+		}
+	})
+
+}

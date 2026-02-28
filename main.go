@@ -13,6 +13,9 @@ import (
 	sopsformats "github.com/getsops/sops/v3/cmd/sops/formats"
 	sopsconfig "github.com/getsops/sops/v3/config"
 	sopsstores "github.com/getsops/sops/v3/stores"
+	sopsdotenv "github.com/getsops/sops/v3/stores/dotenv"
+	sopsini "github.com/getsops/sops/v3/stores/ini"
+	sopsjson "github.com/getsops/sops/v3/stores/json"
 	sopsyaml "github.com/getsops/sops/v3/stores/yaml"
 	"gopkg.in/yaml.v3"
 )
@@ -51,7 +54,7 @@ func main() {
 func usage() {
 	out := flag.CommandLine.Output()
 	fmt.Fprintf(out, "sops-cop %s\n\n", version)
-	fmt.Fprintln(out, "Validates that YAML values are encrypted according to .sops.yaml rules.")
+	fmt.Fprintln(out, "Validates YAML/JSON/ENV/INI values are encrypted according to .sops.yaml rules.")
 	fmt.Fprintln(out, "Usage:")
 	fmt.Fprintln(out, "  sops-cop [-target <path-inside-project>]")
 	fmt.Fprintln(out)
@@ -125,8 +128,8 @@ func validateProject(config *SopsConfig, configDir string, stderr io.Writer) int
 			return nil
 		}
 
-		if !sopsformats.IsYAMLFile(path) {
-			fmt.Fprintf(stderr, "warning: skipping non-YAML file matched by path_regex: %s\n", path)
+		if !isSupportedStructuredFile(path) {
+			fmt.Fprintf(stderr, "warning: skipping unsupported file matched by path_regex: %s\n", path)
 			return nil
 		}
 
@@ -163,9 +166,9 @@ func validateFileWithRule(filePath string, rule *sopsconfig.Config, stderr io.Wr
 		return exitFileReadError, 0
 	}
 
-	failures, err := validateYAMLContent(data, rule)
+	failures, formatName, err := validateContentForFile(filePath, data, rule)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: invalid YAML: %v\n", err)
+		fmt.Fprintf(stderr, "error: invalid %s: %v\n", formatName, err)
 		return exitInvalidYAML, 0
 	}
 
@@ -177,6 +180,90 @@ func validateFileWithRule(filePath string, rule *sopsconfig.Config, stderr io.Wr
 	}
 
 	return exitSuccess, 0
+}
+
+// plainFileLoader is implemented by SOPS format stores that load plaintext into tree branches.
+type plainFileLoader interface {
+	LoadPlainFile([]byte) (sops.TreeBranches, error)
+}
+
+func isSupportedStructuredFile(path string) bool {
+	return sopsformats.IsYAMLFile(path) ||
+		sopsformats.IsJSONFile(path) ||
+		sopsformats.IsEnvFile(path) ||
+		sopsformats.IsIniFile(path)
+}
+
+func formatNameForPath(path string) string {
+	switch {
+	case sopsformats.IsYAMLFile(path):
+		return "YAML"
+	case sopsformats.IsJSONFile(path):
+		return "JSON"
+	case sopsformats.IsEnvFile(path):
+		return "ENV"
+	case sopsformats.IsIniFile(path):
+		return "INI"
+	default:
+		return "file"
+	}
+}
+
+func validateContentForFile(filePath string, data []byte, rule *sopsconfig.Config) ([]string, string, error) {
+	if sopsformats.IsYAMLFile(filePath) {
+		failures, err := validateYAMLContent(data, rule)
+		return failures, "YAML", err
+	}
+
+	if strings.TrimSpace(string(data)) == "" {
+		return []string{}, formatNameForPath(filePath), nil
+	}
+
+	switch {
+	case sopsformats.IsJSONFile(filePath):
+		failures, err := validateStructuredContent(data, rule, sopsjson.NewStore(&sopsconfig.JSONStoreConfig{}))
+		return failures, "JSON", err
+	case sopsformats.IsEnvFile(filePath):
+		failures, err := validateStructuredContent(data, rule, sopsdotenv.NewStore(&sopsconfig.DotenvStoreConfig{}))
+		return failures, "ENV", err
+	case sopsformats.IsIniFile(filePath):
+		failures, err := validateStructuredContent(data, rule, sopsini.NewStore(&sopsconfig.INIStoreConfig{}))
+		return failures, "INI", err
+	default:
+		return []string{}, formatNameForPath(filePath), nil
+	}
+}
+
+func validateStructuredContent(data []byte, rule *sopsconfig.Config, store plainFileLoader) ([]string, error) {
+	branchesForValidation, err := store.LoadPlainFile(data)
+	if err != nil {
+		return []string{}, err
+	}
+
+	if len(branchesForValidation) == 0 {
+		return []string{}, nil
+	}
+
+	branchesForSelection, err := store.LoadPlainFile(data)
+	if err != nil {
+		return []string{}, err
+	}
+
+	encryptedPaths, err := computeSOPSSelectedPathsFromBranches(branchesForSelection, rule)
+	if err != nil {
+		return []string{}, err
+	}
+
+	var failures []string
+	for _, branch := range branchesForValidation {
+		walkTreeValue(branch, nil, &failures, encryptedPaths)
+	}
+
+	if failures == nil {
+		failures = []string{}
+	}
+
+	return failures, nil
 }
 
 // validateYAMLContent parses YAML bytes and returns locations of unencrypted values that should be encrypted.
@@ -288,6 +375,11 @@ func computeSOPSSelectedPaths(data []byte, rule *sopsconfig.Config) (map[string]
 		return nil, err
 	}
 
+	return computeSOPSSelectedPathsFromBranches(branches, rule)
+}
+
+func computeSOPSSelectedPathsFromBranches(branches sops.TreeBranches, rule *sopsconfig.Config) (map[string]struct{}, error) {
+
 	// Apply the SOPS default: when no selector is specified, keys ending in
 	// "_unencrypted" are left as plaintext.
 	unencryptedSuffix := rule.UnencryptedSuffix
@@ -320,6 +412,38 @@ func computeSOPSSelectedPaths(data []byte, rule *sopsconfig.Config) (map[string]
 	}
 
 	return selected, nil
+}
+
+func walkTreeValue(value interface{}, path []string, failures *[]string, encryptedPaths map[string]struct{}) {
+	switch typed := value.(type) {
+	case sops.TreeBranch:
+		for _, item := range typed {
+			key := fmt.Sprint(item.Key)
+			if key == sopsstores.SopsMetadataKey {
+				continue
+			}
+			nextPath := appendPath(path, key)
+			walkTreeValue(item.Value, nextPath, failures, encryptedPaths)
+		}
+
+	case []interface{}:
+		for i, item := range typed {
+			nextPath := appendPath(path, strconv.Itoa(i))
+			walkTreeValue(item, nextPath, failures, encryptedPaths)
+		}
+
+	case string:
+		if _, shouldEncrypt := encryptedPaths[joinPath(path)]; shouldEncrypt && !strings.HasPrefix(typed, encryptedPrefix) {
+			msg := fmt.Sprintf("unencrypted value found at '%s'", joinPath(path))
+			*failures = append(*failures, msg)
+		}
+
+	default:
+		if _, shouldEncrypt := encryptedPaths[joinPath(path)]; shouldEncrypt {
+			msg := fmt.Sprintf("unencrypted value found at '%s'", joinPath(path))
+			*failures = append(*failures, msg)
+		}
+	}
 }
 
 func collectSelectedPaths(value interface{}, path []string, selected map[string]struct{}) {

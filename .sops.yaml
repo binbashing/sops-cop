@@ -1,3 +1,9 @@
 creation_rules:
   - path_regex: '(^|.*/).*secret.*\.ya?ml$'
     encrypted_regex: '^(data|stringData)$'
+  - path_regex: '(^|.*/).*secret.*\.json$'
+    encrypted_regex: ''
+  - path_regex: '(^|.*/).*secret.*\.env$'
+    encrypted_regex: ''
+  - path_regex: '(^|.*/).*secret.*\.ini$'
+    encrypted_regex: ''

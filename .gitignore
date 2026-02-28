@@ -13,8 +13,10 @@
 
 # Build artifacts
 sops-cop
+sops-cop_*
 /bin/
 /dist/
+/dist-local/
 
 # Dependency directories (if used)
 vendor/
