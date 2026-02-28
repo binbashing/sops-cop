@@ -127,6 +127,30 @@ func TestValidateYAMLContent(t *testing.T) {
 			rule:     ruleDefault,
 			wantFail: []string{},
 		},
+		{
+			name:     "empty file returns no failures",
+			yaml:     "",
+			rule:     ruleAllEncrypted,
+			wantFail: []string{},
+		},
+		{
+			name:     "comment-only file returns no failures",
+			yaml:     "# This is a comment\n# Another comment\n",
+			rule:     ruleAllEncrypted,
+			wantFail: []string{},
+		},
+		{
+			name:     "bare document separator returns no failures",
+			yaml:     "---\n",
+			rule:     ruleAllEncrypted,
+			wantFail: []string{},
+		},
+		{
+			name:     "unencrypted_regex excludes matching keys from encryption",
+			yaml:     "runtime: prod\ntags: web\nsecret: plaintext\n",
+			rule:     &sopsconfig.Config{UnencryptedRegex: "^(runtime|tags)$"},
+			wantFail: []string{"3:9: unencrypted value found at 'secret'"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -219,7 +243,83 @@ func TestRunExitCodes(t *testing.T) {
 				return tempDir
 			},
 			wantExitCode:  exitSuccess,
-			wantErrSubstr: "",
+			wantErrSubstr: "All files compliant",
+		},
+		{
+			name: "valid project prints success summary",
+			setup: func(t *testing.T) string {
+				tempDir := t.TempDir()
+				sopsConfig := `creation_rules:
+  - path_regex: ".*\\.yaml$"
+    encrypted_regex: ""
+`
+				if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+					t.Fatalf("write .sops.yaml: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(tempDir, "valid.yaml"), []byte("key: ENC[AES256_GCM,data:abc]\n"), 0o600); err != nil {
+					t.Fatalf("write valid yaml: %v", err)
+				}
+				return tempDir
+			},
+			wantExitCode:  exitSuccess,
+			wantErrSubstr: "All files compliant",
+		},
+		{
+			name: "unencrypted value prints violation summary",
+			setup: func(t *testing.T) string {
+				tempDir := t.TempDir()
+				sopsConfig := `creation_rules:
+  - path_regex: ".*\\.yaml$"
+    encrypted_regex: ""
+`
+				if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+					t.Fatalf("write .sops.yaml: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(tempDir, "bad.yaml"), []byte("a: plain1\nb: plain2\n"), 0o600); err != nil {
+					t.Fatalf("write bad yaml: %v", err)
+				}
+				return tempDir
+			},
+			wantExitCode:  exitUnencryptedValue,
+			wantErrSubstr: "SOPS-COP found 2 violations",
+		},
+		{
+			name: "empty yaml file passes",
+			setup: func(t *testing.T) string {
+				tempDir := t.TempDir()
+				sopsConfig := `creation_rules:
+  - path_regex: ".*\\.yaml$"
+    encrypted_regex: ""
+`
+				if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+					t.Fatalf("write .sops.yaml: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(tempDir, "empty.yaml"), []byte(""), 0o600); err != nil {
+					t.Fatalf("write empty yaml: %v", err)
+				}
+				return tempDir
+			},
+			wantExitCode:  exitSuccess,
+			wantErrSubstr: "All files compliant",
+		},
+		{
+			name: "comment-only yaml file passes",
+			setup: func(t *testing.T) string {
+				tempDir := t.TempDir()
+				sopsConfig := `creation_rules:
+  - path_regex: ".*\\.yaml$"
+    encrypted_regex: ""
+`
+				if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+					t.Fatalf("write .sops.yaml: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(tempDir, "comments.yaml"), []byte("# only comments here\n"), 0o600); err != nil {
+					t.Fatalf("write comments yaml: %v", err)
+				}
+				return tempDir
+			},
+			wantExitCode:  exitSuccess,
+			wantErrSubstr: "All files compliant",
 		},
 		{
 			name: "only files matching path_regex are validated",

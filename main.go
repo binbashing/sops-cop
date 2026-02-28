@@ -17,6 +17,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 const (
 	encryptedPrefix = "ENC["
 	dryRunMarker    = "__SOPS_COP_SELECTED__"
@@ -32,8 +35,14 @@ const (
 // main configures CLI behavior and exits with process-level status codes.
 func main() {
 	target := flag.String("target", ".", "Path inside a SOPS project (optional). Used to locate .sops.yaml")
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Usage = usage
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Fprintf(os.Stdout, "sops-cop %s\n", version)
+		os.Exit(exitSuccess)
+	}
 
 	os.Exit(run(*target, os.Stderr))
 }
@@ -41,7 +50,8 @@ func main() {
 // usage prints CLI help text and available flags.
 func usage() {
 	out := flag.CommandLine.Output()
-	fmt.Fprintln(out, "sops-cop: Validates that YAML values are encrypted according to .sops.yaml rules.")
+	fmt.Fprintf(out, "sops-cop %s\n\n", version)
+	fmt.Fprintln(out, "Validates that YAML values are encrypted according to .sops.yaml rules.")
 	fmt.Fprintln(out, "Usage:")
 	fmt.Fprintln(out, "  sops-cop [-target <path-inside-project>]")
 	fmt.Fprintln(out)
@@ -90,6 +100,7 @@ func run(target string, stderr io.Writer) int {
 // validateProject validates all files in configDir that match creation_rules.path_regex.
 func validateProject(config *SopsConfig, configDir string, stderr io.Writer) int {
 	exitCode := exitSuccess
+	totalViolations := 0
 
 	err := filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -119,7 +130,8 @@ func validateProject(config *SopsConfig, configDir string, stderr io.Writer) int
 			return nil
 		}
 
-		code := validateFileWithRule(path, rule, stderr)
+		code, violations := validateFileWithRule(path, rule, stderr)
+		totalViolations += violations
 		if code != exitSuccess && exitCode == exitSuccess {
 			exitCode = code
 		}
@@ -132,56 +144,74 @@ func validateProject(config *SopsConfig, configDir string, stderr io.Writer) int
 		return exitFileReadError
 	}
 
+	// Summary report to stderr so it doesn't interfere with piping.
+	if totalViolations > 0 {
+		fmt.Fprintf(stderr, "\n🚨 SOPS-COP found %d violations! Fix these before committing.\n", totalViolations)
+	} else if exitCode == exitSuccess {
+		fmt.Fprintf(stderr, "\n✅ All files compliant with .sops.yaml rules.\n")
+	}
+
 	return exitCode
 }
 
 // validateFileWithRule validates a single file using a specific creation rule.
-func validateFileWithRule(filePath string, rule *sopsconfig.Config, stderr io.Writer) int {
-
-	// Read and validate file
+// Returns (exitCode, violationCount).
+func validateFileWithRule(filePath string, rule *sopsconfig.Config, stderr io.Writer) (int, int) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to read file: %v\n", err)
-		return exitFileReadError
+		return exitFileReadError, 0
 	}
 
 	failures, err := validateYAMLContent(data, rule)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: invalid YAML: %v\n", err)
-		return exitInvalidYAML
+		return exitInvalidYAML, 0
 	}
 
 	if len(failures) > 0 {
 		for _, msg := range failures {
 			fmt.Fprintf(stderr, "%s:%s\n", filePath, msg)
 		}
-		return exitUnencryptedValue
+		return exitUnencryptedValue, len(failures)
 	}
 
-	return exitSuccess
+	return exitSuccess, 0
 }
 
-// validateYAMLContent parses YAML bytes and returns locations of unencrypted values that should be encrypted
+// validateYAMLContent parses YAML bytes and returns locations of unencrypted values that should be encrypted.
 func validateYAMLContent(data []byte, rule *sopsconfig.Config) ([]string, error) {
-	encryptedPaths, err := computeSOPSSelectedPaths(data, rule)
-	if err != nil {
-		return []string{}, err
-	}
-
+	// Parse YAML first to detect empty or comment-only files before
+	// handing data to the SOPS store, which rejects empty input.
 	var root yaml.Node
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return []string{}, err
 	}
 
+	// Empty file or comment-only: nothing to validate.
 	if len(root.Content) == 0 {
 		return []string{}, nil
 	}
 
-	var failures []string
-	// root.Content[0] is the DocumentNode
-	walkNode(root.Content[0], nil, &failures, encryptedPaths)
+	doc := root.Content[0]
+	// Document node with no data (e.g., bare "---").
+	if len(doc.Content) == 0 {
+		return []string{}, nil
+	}
 
-	// Ensure we return a proper empty slice, not nil
+	// Determine which paths SOPS would encrypt. tree.Encrypt with our
+	// dryRunCipher respects EncryptedRegex, UnencryptedRegex, EncryptedSuffix,
+	// UnencryptedSuffix, and comment-based regex selectors — mirroring SOPS's
+	// own selection logic exactly.
+	encryptedPaths, err := computeSOPSSelectedPaths(data, rule)
+	if err != nil {
+		return []string{}, err
+	}
+
+	var failures []string
+	walkNode(doc, nil, &failures, encryptedPaths)
+
+	// Ensure we return a proper empty slice, not nil.
 	if failures == nil {
 		failures = []string{}
 	}
@@ -221,6 +251,9 @@ func walkNode(node *yaml.Node, path []string, failures *[]string, encryptedPaths
 		}
 
 	case yaml.ScalarNode:
+		// Flag this value only when both conditions are met:
+		// 1. The path is in encryptedPaths (SOPS selected it for encryption).
+		// 2. The value is not already encrypted (missing "ENC[" prefix or not a string).
 		if _, shouldEncrypt := encryptedPaths[joinPath(path)]; shouldEncrypt && (node.Tag != "!!str" || !strings.HasPrefix(node.Value, encryptedPrefix)) {
 			msg := fmt.Sprintf("%d:%d: unencrypted value found at '%s'",
 				node.Line, node.Column, joinPath(path))
@@ -234,6 +267,10 @@ func walkNode(node *yaml.Node, path []string, failures *[]string, encryptedPaths
 	}
 }
 
+// dryRunCipher is a no-op cipher that marks values as selected for encryption.
+// When passed to tree.Encrypt, SOPS applies its full regex/suffix selection logic
+// and calls Encrypt only for values it considers encryptable — letting us discover
+// the exact set of paths SOPS would encrypt without performing real cryptography.
 type dryRunCipher struct{}
 
 func (c dryRunCipher) Encrypt(plaintext interface{}, key []byte, additionalData string) (string, error) {

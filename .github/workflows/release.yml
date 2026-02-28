@@ -57,11 +57,18 @@ jobs:
           TARGET_DIR="sops-cop_${VERSION}_${GOOS}_${GOARCH}"
           mkdir -p "$TARGET_DIR"
 
-          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags="-s -w" -o "$TARGET_DIR/$BIN_NAME" .
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath \
+            -ldflags="-s -w -X main.version=${VERSION}" \
+            -o "$TARGET_DIR/$BIN_NAME" .
           cp README.md "$TARGET_DIR/README.md"
 
-          ARCHIVE="${TARGET_DIR}.tar.gz"
-          tar -czf "dist/$ARCHIVE" "$TARGET_DIR"
+          if [[ "$GOOS" == "windows" ]]; then
+            ARCHIVE="${TARGET_DIR}.zip"
+            zip -r "dist/$ARCHIVE" "$TARGET_DIR"
+          else
+            ARCHIVE="${TARGET_DIR}.tar.gz"
+            tar -czf "dist/$ARCHIVE" "$TARGET_DIR"
+          fi
 
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
@@ -85,12 +92,13 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          shasum -a 256 *.tar.gz > checksums.txt
+          shasum -a 256 *.tar.gz *.zip > checksums.txt
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.tar.gz
+            dist/*.zip
             dist/checksums.txt
           generate_release_notes: true
