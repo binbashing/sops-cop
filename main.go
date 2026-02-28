@@ -89,7 +89,7 @@ func run(target string, stderr io.Writer) int {
 
 	config, configDir, err := loadSopsConfig(startDir)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
+		fmt.Fprintf(stderr, "error: failed to load .sops.yaml config: %v\n", err)
 		return exitConfigError
 	}
 
@@ -117,7 +117,7 @@ func validateProject(config *SopsConfig, configDir string, stderr io.Writer) int
 
 		rule, matched, err := loadCreationRuleForFile(config, path)
 		if err != nil {
-			fmt.Fprintf(stderr, "error: %v\n", err)
+			fmt.Fprintf(stderr, "error: failed to match creation rule for %s: %v\n", path, err)
 			exitCode = exitConfigError
 			return nil
 		}

@@ -353,6 +353,82 @@ func TestRunExitCodes(t *testing.T) {
 			wantErrSubstr: "secrets/bad.yaml",
 		},
 		{
+			name: "multiple creation rules apply different encryption to different paths",
+			setup: func(t *testing.T) string {
+				tempDir := t.TempDir()
+				// Rule 1: secrets/ files must encrypt everything
+				// Rule 2: configs/ files only encrypt keys matching "password"
+				sopsConfig := `creation_rules:
+  - path_regex: "^secrets/.*\\.yaml$"
+    encrypted_regex: ""
+  - path_regex: "^configs/.*\\.yaml$"
+    encrypted_regex: "^password$"
+`
+				if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+					t.Fatalf("write .sops.yaml: %v", err)
+				}
+
+				if err := os.MkdirAll(filepath.Join(tempDir, "secrets"), 0o755); err != nil {
+					t.Fatalf("mkdir secrets: %v", err)
+				}
+				if err := os.MkdirAll(filepath.Join(tempDir, "configs"), 0o755); err != nil {
+					t.Fatalf("mkdir configs: %v", err)
+				}
+
+				// secrets/creds.yaml: fully encrypted — should pass
+				if err := os.WriteFile(filepath.Join(tempDir, "secrets", "creds.yaml"),
+					[]byte("token: ENC[AES256_GCM,data:abc]\n"), 0o600); err != nil {
+					t.Fatalf("write secrets creds.yaml: %v", err)
+				}
+
+				// configs/db.yaml: host is plaintext (allowed), password is plaintext (violation)
+				if err := os.WriteFile(filepath.Join(tempDir, "configs", "db.yaml"),
+					[]byte("host: localhost\npassword: plaintext\n"), 0o600); err != nil {
+					t.Fatalf("write configs db.yaml: %v", err)
+				}
+
+				return tempDir
+			},
+			wantExitCode:  exitUnencryptedValue,
+			wantErrSubstr: "configs/db.yaml",
+		},
+		{
+			name: "multiple creation rules all passing",
+			setup: func(t *testing.T) string {
+				tempDir := t.TempDir()
+				sopsConfig := `creation_rules:
+  - path_regex: "^secrets/.*\\.yaml$"
+    encrypted_regex: ""
+  - path_regex: "^configs/.*\\.yaml$"
+    encrypted_regex: "^password$"
+`
+				if err := os.WriteFile(filepath.Join(tempDir, ".sops.yaml"), []byte(sopsConfig), 0o600); err != nil {
+					t.Fatalf("write .sops.yaml: %v", err)
+				}
+
+				if err := os.MkdirAll(filepath.Join(tempDir, "secrets"), 0o755); err != nil {
+					t.Fatalf("mkdir secrets: %v", err)
+				}
+				if err := os.MkdirAll(filepath.Join(tempDir, "configs"), 0o755); err != nil {
+					t.Fatalf("mkdir configs: %v", err)
+				}
+
+				if err := os.WriteFile(filepath.Join(tempDir, "secrets", "creds.yaml"),
+					[]byte("token: ENC[AES256_GCM,data:abc]\n"), 0o600); err != nil {
+					t.Fatalf("write secrets creds.yaml: %v", err)
+				}
+
+				if err := os.WriteFile(filepath.Join(tempDir, "configs", "db.yaml"),
+					[]byte("host: localhost\npassword: ENC[AES256_GCM,data:xyz]\n"), 0o600); err != nil {
+					t.Fatalf("write configs db.yaml: %v", err)
+				}
+
+				return tempDir
+			},
+			wantExitCode:  exitSuccess,
+			wantErrSubstr: "All files compliant",
+		},
+		{
 			name: "invalid rule when both encrypted_regex and unencrypted_regex are set",
 			setup: func(t *testing.T) string {
 				tempDir := t.TempDir()

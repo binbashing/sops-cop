@@ -1,20 +1,21 @@
-# sops-cop
+# SOPS-Cop
 
 [![Go Version](https://img.shields.io/badge/Go-1.23%2B-00ADD8?logo=go)](https://go.dev/)
 [![CI](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml/badge.svg)](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-go%20test%20.%2F...-brightgreen)](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml)
 
-A small, fast Go CLI that enforces SOPS encryption rules without requiring the SOPS binary or encryption keys; designed for commit hooks and CI jobs.
+SOPS-Cop is a CLI tool to enforce SOPS encryption rules without requiring the SOPS binary or encryption keys; designed for commit hooks and CI jobs.
+
 
 ## How it works
 
-- Locates `.sops.yaml` by walking up from the provided path (or current directory).
-- Scans files matched by `creation_rules` and checks that selected values are encrypted.
+- Discovers your existing SOPS configuration and verifies encryption rules are followed.
 - Reports each unencrypted key path to `stderr` with file path and line:column location.
 
 ## Exit codes
 
 - `0`: all checked values are encrypted
+- `2`: invalid arguments (for example, unresolvable target path)
 - `3`: file read error (for example, file missing or permission denied)
 - `4`: invalid YAML input
 - `5`: one or more unencrypted values were found
@@ -54,6 +55,12 @@ Or start from any path inside the project:
 
 ```bash
 ./sops-cop -target path/to/any/subdir
+```
+
+Print version:
+
+```bash
+./sops-cop -version
 ```
 
 Help:
