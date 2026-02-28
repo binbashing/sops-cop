@@ -40,7 +40,7 @@ jobs:
           go-version-file: go.mod
           cache: false
 
-      - name: Build binary and package
+      - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -50,28 +50,16 @@ jobs:
 
           mkdir -p dist
 
-          BIN_NAME="sops-cop"
+          BIN_NAME="sops-cop_${VERSION}_${GOOS}_${GOARCH}"
           if [[ "$GOOS" == "windows" ]]; then
             BIN_NAME="${BIN_NAME}.exe"
           fi
 
-          TARGET_DIR="sops-cop_${VERSION}_${GOOS}_${GOARCH}"
-          mkdir -p "$TARGET_DIR"
-
           CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath \
             -ldflags="-s -w -X main.version=${VERSION}" \
-            -o "$TARGET_DIR/$BIN_NAME" .
-          cp README.md "$TARGET_DIR/README.md"
+            -o "dist/$BIN_NAME" .
 
-          if [[ "$GOOS" == "windows" ]]; then
-            ARCHIVE="${TARGET_DIR}.zip"
-            zip -r "dist/$ARCHIVE" "$TARGET_DIR"
-          else
-            ARCHIVE="${TARGET_DIR}.tar.gz"
-            tar -czf "dist/$ARCHIVE" "$TARGET_DIR"
-          fi
-
-      - name: Upload packaged artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: sops-cop-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -93,14 +81,12 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          shopt -s nullglob
-          shasum -a 256 *.tar.gz *.zip > checksums.txt
+          shasum -a 256 sops-cop_* > checksums.txt
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.tar.gz
-            dist/*.zip
+            dist/sops-cop_*
             dist/checksums.txt
           generate_release_notes: true
