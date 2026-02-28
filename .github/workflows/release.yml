@@ -49,12 +49,12 @@ jobs:
 
           mkdir -p dist
 
-          BIN_NAME="sops-enforcer"
+          BIN_NAME="sops-cop"
           if [[ "$GOOS" == "windows" ]]; then
             BIN_NAME="${BIN_NAME}.exe"
           fi
 
-          TARGET_DIR="sops-enforcer_${VERSION}_${GOOS}_${GOARCH}"
+          TARGET_DIR="sops-cop_${VERSION}_${GOOS}_${GOARCH}"
           mkdir -p "$TARGET_DIR"
 
           CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags="-s -w" -o "$TARGET_DIR/$BIN_NAME" .
@@ -66,7 +66,7 @@ jobs:
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sops-enforcer-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: sops-cop-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*.tar.gz
 
   release:

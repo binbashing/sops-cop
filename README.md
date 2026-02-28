@@ -1,8 +1,8 @@
-# sops-enforcer
+# sops-cop
 
 [![Go Version](https://img.shields.io/badge/Go-1.23%2B-00ADD8?logo=go)](https://go.dev/)
-[![CI](https://github.com/binbashing/sops-enforcer/actions/workflows/ci.yml/badge.svg)](https://github.com/binbashing/sops-enforcer/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-go%20test%20.%2F...-brightgreen)](https://github.com/binbashing/sops-enforcer/actions/workflows/ci.yml)
+[![CI](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml/badge.svg)](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-go%20test%20.%2F...-brightgreen)](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml)
 
 A small, fast Go CLI that enforces SOPS encryption rules without requiring the SOPS binary or encryption keys; designed for commit hooks and CI jobs.
 
@@ -31,35 +31,35 @@ If you install from release binaries, Go is not required.
 ### Option 1: `go install`
 
 ```bash
-go install github.com/binbashing/sops-enforcer@latest
+go install github.com/binbashing/sops-cop@latest
 ```
 
 ### Option 2: prebuilt release binary (no Go required)
 
-Download the correct archive from the GitHub Releases page for your OS/arch, extract it, and place `sops-enforcer` on your `PATH`.
+Download the correct archive from the GitHub Releases page for your OS/arch, extract it, and place `sops-cop` on your `PATH`.
 
 ## Build
 
 ```bash
-go build -o sops-enforcer .
+go build -o sops-cop .
 ```
 
 ## Usage
 
 ```bash
-./sops-enforcer
+./sops-cop
 ```
 
 Or start from any path inside the project:
 
 ```bash
-./sops-enforcer -target path/to/any/subdir
+./sops-cop -target path/to/any/subdir
 ```
 
 Help:
 
 ```bash
-./sops-enforcer -h
+./sops-cop -h
 ```
 
 ## Examples
@@ -79,7 +79,7 @@ sops:
 Run from anywhere in that repo:
 
 ```bash
-./sops-enforcer -target ./secrets
+./sops-cop -target ./secrets
 # exit code: 0
 ```
 
@@ -94,7 +94,7 @@ spec:
 Run:
 
 ```bash
-./sops-enforcer -target .
+./sops-cop -target .
 # stderr:
 # /path/to/repo/secrets/bad.yaml:3:15: unencrypted value found at 'spec.db.password'
 # exit code: 5

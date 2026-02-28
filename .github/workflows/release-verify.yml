@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          OUT="/tmp/sops-enforcer"
+          OUT="/tmp/sops-cop"
           if [[ "$GOOS" == "windows" ]]; then
             OUT="${OUT}.exe"
           fi

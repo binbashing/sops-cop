@@ -22,7 +22,7 @@ func loadSopsConfig(startDir string) (*SopsConfig, string, error) {
 	}
 
 	// SOPS lookup expects a file path and starts from its parent directory.
-	lookupStart := filepath.Join(absStartDir, "__sops_enforcer_lookup_start__")
+	lookupStart := filepath.Join(absStartDir, "__sops_cop_lookup_start__")
 
 	configPath, err := sopsconfig.FindConfigFile(lookupStart)
 	if err != nil {

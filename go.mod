@@ -1,4 +1,4 @@
-module github.com/binbashing/sops-enforcer
+module github.com/binbashing/sops-cop
 
 go 1.23.0
 

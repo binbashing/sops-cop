@@ -19,7 +19,7 @@ import (
 
 const (
 	encryptedPrefix = "ENC["
-	dryRunMarker    = "__SOPS_ENFORCER_SELECTED__"
+	dryRunMarker    = "__SOPS_COP_SELECTED__"
 
 	exitSuccess          = 0
 	exitInvalidArguments = 2
@@ -41,9 +41,9 @@ func main() {
 // usage prints CLI help text and available flags.
 func usage() {
 	out := flag.CommandLine.Output()
-	fmt.Fprintln(out, "sops-enforcer: Validates that YAML values are encrypted according to .sops.yaml rules.")
+	fmt.Fprintln(out, "sops-cop: Validates that YAML values are encrypted according to .sops.yaml rules.")
 	fmt.Fprintln(out, "Usage:")
-	fmt.Fprintln(out, "  sops-enforcer [-target <path-inside-project>]")
+	fmt.Fprintln(out, "  sops-cop [-target <path-inside-project>]")
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "The enforcer locates .sops.yaml from the provided path (or current directory),")
 	fmt.Fprintln(out, "then scans the SOPS project and validates files matched by path_regex rules.")
@@ -273,7 +273,7 @@ func computeSOPSSelectedPaths(data []byte, rule *sopsconfig.Config) (map[string]
 		},
 	}
 
-	if _, err := tree.Encrypt([]byte("sops-enforcer-dry-run-key"), dryRunCipher{}); err != nil {
+	if _, err := tree.Encrypt([]byte("sops-cop-dry-run-key"), dryRunCipher{}); err != nil {
 		return nil, err
 	}
 
