@@ -1,0 +1,17 @@
+.git
+.github
+.vscode
+.idea
+.DS_Store
+
+# Build outputs
+bin
+dist
+dist-local
+sops-cop
+sops-cop_*
+*.test
+*.out
+
+# Docs and local notes
+next steps.md
