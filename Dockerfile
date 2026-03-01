@@ -8,7 +8,9 @@ RUN go mod download
 COPY . .
 
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
   -trimpath \
   -ldflags="-s -w -X main.version=${VERSION}" \
   -o /out/sops-cop .
