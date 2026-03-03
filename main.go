@@ -30,10 +30,30 @@ const (
 	exitSuccess          = 0
 	exitInvalidArguments = 2
 	exitFileReadError    = 3
-	exitInvalidYAML      = 4
+	exitInvalidInput     = 4
 	exitUnencryptedValue = 5
 	exitConfigError      = 6
 )
+
+func exitPriority(code int) int {
+	switch code {
+	case exitConfigError:
+		return 3
+	case exitFileReadError, exitInvalidInput:
+		return 2
+	case exitUnencryptedValue:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func mergeExitCode(current, candidate int) int {
+	if exitPriority(candidate) > exitPriority(current) {
+		return candidate
+	}
+	return current
+}
 
 // main configures CLI behavior and exits with process-level status codes.
 func main() {
@@ -135,16 +155,14 @@ func validateProject(config *SopsConfig, configDir string, stderr io.Writer) int
 
 		code, violations := validateFileWithRule(path, rule, stderr)
 		totalViolations += violations
-		if code != exitSuccess && exitCode == exitSuccess {
-			exitCode = code
-		}
+		exitCode = mergeExitCode(exitCode, code)
 
 		return nil
 	})
 
 	if err != nil {
 		fmt.Fprintf(stderr, "error: failed to walk project directory: %v\n", err)
-		return exitFileReadError
+		return mergeExitCode(exitCode, exitFileReadError)
 	}
 
 	// Summary report to stderr so it doesn't interfere with piping.
@@ -169,7 +187,7 @@ func validateFileWithRule(filePath string, rule *sopsconfig.Config, stderr io.Wr
 	failures, formatName, err := validateContentForFile(filePath, data, rule)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: invalid %s: %v\n", formatName, err)
-		return exitInvalidYAML, 0
+		return exitInvalidInput, 0
 	}
 
 	if len(failures) > 0 {

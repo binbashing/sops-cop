@@ -204,7 +204,7 @@ func TestRunExitCodes(t *testing.T) {
 				}
 				return tempDir
 			},
-			wantExitCode:  exitInvalidYAML,
+			wantExitCode:  exitInvalidInput,
 			wantErrSubstr: "invalid YAML",
 		},
 		{
