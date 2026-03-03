@@ -1,6 +1,6 @@
 # SOPS-Cop
 
-[![Go Version](https://img.shields.io/badge/Go-1.23%2B-00ADD8?logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![CI](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml/badge.svg)](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-go%20test%20.%2F...-brightgreen)](https://github.com/binbashing/sops-cop/actions/workflows/ci.yml)
 
@@ -24,7 +24,7 @@ SOPS-Cop is a CLI tool to enforce SOPS encryption rules without requiring the SO
 
 ## Requirements
 
-- Go 1.23+
+- Go 1.26+
 
 If you install from release binaries, Go is not required.
 
@@ -120,6 +120,14 @@ go vet ./...
 GitHub Actions runs tests on push and pull request via:
 
 - `.github/workflows/ci.yml`
+
+## Dependency updates
+
+Dependabot is configured via `.github/dependabot.yml` to open weekly PRs for:
+
+- Go modules (`gomod`)
+- Docker base images (`Dockerfile`)
+- GitHub Actions workflow dependencies
 
 ## Project structure
 
