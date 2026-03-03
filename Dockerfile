@@ -1,4 +1,4 @@
-FROM golang:1-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1-alpine AS builder
 
 WORKDIR /src
 
@@ -8,8 +8,8 @@ RUN go mod download
 COPY . .
 
 ARG VERSION=dev
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+ARG TARGETOS
+ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
   -trimpath \
   -ldflags="-s -w -X main.version=${VERSION}" \
