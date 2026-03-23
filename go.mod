@@ -3,7 +3,7 @@ module github.com/binbashing/sops-cop
 go 1.26.0
 
 require (
-	github.com/getsops/sops/v3 v3.12.1
+	github.com/getsops/sops/v3 v3.12.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
